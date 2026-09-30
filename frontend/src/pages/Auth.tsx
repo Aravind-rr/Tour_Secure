@@ -31,7 +31,7 @@ function Login({ onSwitch }: { onSwitch: () => void }) {
     e.preventDefault();
     setBusy(true);
     try {
-      // baseURL must be http://localhost:4000/api (see VITE_API_BASE)
+      // baseURL comes from VITE_API_BASE.
       console.log("LOGIN →", {
         baseURL: api.defaults.baseURL,
         url: "/auth/login",

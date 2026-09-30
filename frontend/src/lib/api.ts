@@ -1,8 +1,10 @@
 // frontend/src/lib/api.ts
-export const API_URL = import.meta.env.VITE_API_URL as string;
-// Back-compat for pages that import { API_BASE }
 export const API_BASE =
-  import.meta.env.VITE_API_BASE || "http://localhost:4000/api";
+  import.meta.env.VITE_API_BASE?.replace(/\/+$/, "") ||
+  "http://localhost:8080/api";
+
+// Backwards-compatible name used by older modules.
+export const API_URL = API_BASE;
 
 
 async function handle<T>(res: Response): Promise<T> {
@@ -14,10 +16,12 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json();
 }
 
-export const get = async <T>(p: string) => handle<T>(await fetch(`${API_URL}${p}`));
+export const get = async <T>(p: string) =>
+  handle<T>(await fetch(`${API_BASE}${p}`, { credentials: "include" }));
 export const post = async <T, B=unknown>(p: string, body?: B) =>
-  handle<T>(await fetch(`${API_URL}${p}`, {
+  handle<T>(await fetch(`${API_BASE}${p}`, {
     method: 'POST',
+    credentials: "include",
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   }));

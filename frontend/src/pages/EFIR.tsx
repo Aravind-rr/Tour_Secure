@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { http } from "@/lib/http";
-import { API_BASE } from "@/lib/api";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -75,7 +74,7 @@ export default function EFIR() {
   async function load() {
     setLoading(true);
     try {
-      const { data } = await http.get(`${API_BASE}/efir`);
+      const { data } = await http.get("/efir");
       const listData = Array.isArray(data)
         ? data
         : Array.isArray(data?.items)
@@ -91,7 +90,7 @@ export default function EFIR() {
             status: d.status || "Pending",
             createdAt: d.createdAt || new Date().toISOString(),
           }))
-          .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+          .sort((a: EFIRDoc, b: EFIRDoc) => +new Date(b.createdAt) - +new Date(a.createdAt))
       );
     } catch (e: any) {
       notify({ tone: "error", message: e?.message ?? "Failed to load e-FIRs" });
@@ -165,7 +164,7 @@ export default function EFIR() {
         attachments,
       };
 
-      await http.post(`${API_BASE}/efir`, body);
+      await http.post("/efir", body);
 
       notify({ tone: "success", title: "Submitted", message: "Your e-FIR has been recorded." });
       clearDraft();

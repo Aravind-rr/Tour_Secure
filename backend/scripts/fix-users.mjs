@@ -18,8 +18,8 @@ const userSchema = new mongoose.Schema(
 const User = mongoose.model("User", userSchema);
 
 async function main() {
-  const uri = process.env.MONGO_URI || process.env.DATABASE_URL;
-  if (!uri) throw new Error("Missing MONGO_URI in backend/.env");
+  const uri = process.env.MONGO_URL || process.env.MONGO_URI || process.env.MONGODB_URI;
+  if (!uri) throw new Error("Missing MONGO_URL (or MONGO_URI/MONGODB_URI) in backend/.env");
   await mongoose.connect(uri);
 
   const [, , cmd, ...args] = process.argv;

@@ -21,37 +21,50 @@ export interface AuthedRequest extends Request {
   user?: AuthedUser;
 }
 
-/** The shape we accept from jwt.verify (string or payload with common fields) */
+/** The shape we accept from jwt.verify */
 type JwtVerified =
-  | (jwt.JwtPayload & { sub?: string; id?: string; email?: string; role?: Role })
+  | (jwt.JwtPayload & {
+      sub?: string;
+      id?: string;
+      email?: string;
+      role?: Role;
+    })
   | string;
 
 /**
  * requireAuth
  * -------------
  * Ensures the request is authenticated and attaches a normalized `req.user`.
+ *
  * Looks for a token in:
  *   - Authorization: Bearer <token>
  *   - Cookie: <AUTH_COOKIE_NAME>
- *   - X-Access-Token header (fallback)
+ *   - X-Access-Token header
  *
  * The token must be a JWT signed with JWT_SECRET and contain `sub` or `id`.
  */
-export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   const { AUTH_COOKIE_NAME, JWT_SECRET, NODE_ENV } = getEnv();
 
-  // 1) Pull token from various places (keep forgiving order)
-  const authHeader = (req.headers["authorization"] || req.headers["Authorization"]) as
-    | string
-    | undefined;
+  // 1) Pull token from various places
+  const authHeader = (
+    req.headers["authorization"] || req.headers["Authorization"]
+  ) as string | undefined;
 
   const bearer =
     authHeader && authHeader.startsWith("Bearer ")
       ? authHeader.slice(7).trim()
       : null;
 
-  const cookieTok = (req.cookies && req.cookies[AUTH_COOKIE_NAME]) || null;
-  const altTok = (req.headers["x-access-token"] as string) || null;
+  const cookieTok =
+    (req.cookies && req.cookies[AUTH_COOKIE_NAME]) || null;
+
+  const altTok =
+    (req.headers["x-access-token"] as string) || null;
 
   const token = bearer || cookieTok || altTok;
 
@@ -66,14 +79,23 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
         })
       );
     }
-    return res.status(401).json({ error: "Unauthorized", reason: "missing_token" });
+
+    return res.status(401).json({
+      error: "Unauthorized",
+      reason: "missing_token",
+    });
   }
 
   // 2) Verify JWT
   let payload: jwt.JwtPayload;
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JwtVerified;
-    payload = typeof decoded === "string" ? ({} as jwt.JwtPayload) : decoded;
+
+    payload =
+      typeof decoded === "string"
+        ? ({} as jwt.JwtPayload)
+        : decoded;
   } catch (e: any) {
     const kind =
       e?.name === "TokenExpiredError"
@@ -81,44 +103,85 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
         : e?.name === "JsonWebTokenError"
         ? "invalid_token"
         : "verify_failed";
+
     if (NODE_ENV !== "production") {
-      console.error("requireAuth: jwt verify error:", e?.name, e?.message);
+      console.error(
+        "requireAuth: jwt verify error:",
+        e?.name,
+        e?.message
+      );
     }
-    return res.status(401).json({ error: "Unauthorized", reason: kind });
+
+    return res.status(401).json({
+      error: "Unauthorized",
+      reason: kind,
+    });
   }
 
   // 3) Extract a user id from payload
-  const userId = String((payload as any).sub || (payload as any).id || "");
+  const userId = String(
+    (payload as any).sub ||
+      (payload as any).id ||
+      ""
+  );
+
   if (!userId) {
     if (NODE_ENV !== "production") {
-      console.error("requireAuth: token missing sub/id. payload=", payload);
+      console.error(
+        "requireAuth: token missing sub/id. payload=",
+        payload
+      );
     }
-    return res.status(401).json({ error: "Unauthorized", reason: "bad_payload" });
+
+    return res.status(401).json({
+      error: "Unauthorized",
+      reason: "bad_payload",
+    });
   }
 
-  // 4) Ensure the user still exists (minimal projection)
-  const dbUser = await User.findById(userId)
-    .select({ _id: 1, email: 1, name: 1, role: 1 })
-    .lean();
+  // 4) Ensure the user still exists
+  //
+  // Explicitly type the result because the current Mongoose
+  // typings can infer a broader union for the lean() result.
+  const dbUser = (await User.findById(userId)
+    .select({
+      _id: 1,
+      email: 1,
+      name: 1,
+      role: 1,
+    })
+    .lean()) as {
+    _id: unknown;
+    email?: string;
+    name?: string;
+    role?: Role;
+  } | null;
 
   if (!dbUser) {
-    return res.status(401).json({ error: "Unauthorized", reason: "user_not_found" });
+    return res.status(401).json({
+      error: "Unauthorized",
+      reason: "user_not_found",
+    });
   }
 
-  // 5) Attach normalized user to request (and optionally res.locals)
+  // 5) Attach normalized user to request
   req.user = {
-    id: dbUser._id.toString(),
+    id: String(dbUser._id),
     email: dbUser.email,
     name: dbUser.name,
-    role: (dbUser.role as Role) || (payload as any).role || "user",
+    role:
+      dbUser.role ||
+      (payload as any).role ||
+      "user",
   };
+
   (res.locals as any).user = req.user;
 
   return next();
 }
 
-/* -------------------- Optional: Type augmentation for Express -------------------- */
-/* If your TS setup complains about req.user not existing on Request, keep this. */
+/* -------------------- Express Type Augmentation -------------------- */
+/* Allows req.user to exist on normal Express Request objects. */
 declare module "express-serve-static-core" {
   interface Request {
     user?: AuthedUser;

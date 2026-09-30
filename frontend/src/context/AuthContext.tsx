@@ -7,6 +7,7 @@ type Status = "idle" | "loading" | "authenticated" | "unauthenticated";
 type AuthContextType = {
   user: Auth.User | null;
   status: Status;
+  loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -68,7 +69,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ user, status, login, register, refresh, logout }),
+    () => ({
+      user,
+      status,
+      loading: status === "idle" || status === "loading",
+      login,
+      register,
+      refresh,
+      logout,
+    }),
     [user, status]
   );
 

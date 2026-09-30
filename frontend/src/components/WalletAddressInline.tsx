@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import useLocalWallet from "@/hooks/useLocalWallet";
 import { downloadFile } from "@/utils/download";
+import { API_BASE } from "@/lib/api";
 
 type Props = {
   userId: string;
@@ -32,7 +33,7 @@ export default function WalletAddressInline({ userId, value = "", onChange }: Pr
     if (!value) return;
     setBusy(true); setError("");
     try {
-      const r = await fetch("/api/user/wallet", {
+      const r = await fetch(`${API_BASE}/user/wallet`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

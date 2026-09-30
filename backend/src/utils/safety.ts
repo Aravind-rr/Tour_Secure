@@ -1,54 +1,45 @@
 // backend/src/utils/safety.ts
 
-import { ReviewDoc } from "../models/Review";
+/**
+ * Calculate a safety score from 0 to 100.
+ *
+ * Inputs:
+ *   crimeRate  -> 0 to 100, where higher means more crime / less safe
+ *   infraScore -> 0 to 100, where higher means better infrastructure
+ *   sentiment  -> generally treated as a 0 to 100 safety sentiment score
+ *
+ * The result is intentionally kept as a simple deterministic score
+ * because the current routes consume calculateSafety() as a number.
+ */
+export function calculateSafety(
+  crimeRate: number,
+  infraScore: number,
+  sentiment: number
+): number {
+  const crime = clamp(crimeRate, 0, 100);
+  const infra = clamp(infraScore, 0, 100);
+  const sent = clamp(sentiment, 0, 100);
 
-// Compute safety score (0–100)
-export function calculateSafety(reviews: ReviewDoc[]): {
-  score: number;
-  confidence: number;  // 0–1
-  trend: "improving" | "declining" | "stable";
-} {
-  if (!reviews.length) {
-    return { score: 50, confidence: 0, trend: "stable" }; // neutral if no data
+  // Higher crime reduces safety.
+  const crimeSafety = 100 - crime;
+
+  // Infrastructure and sentiment positively influence safety.
+  const score =
+    crimeSafety * 0.5 +
+    infra * 0.3 +
+    sent * 0.2;
+
+  return Math.round(clamp(score, 0, 100));
+}
+
+function clamp(
+  value: number,
+  min: number,
+  max: number
+): number {
+  if (!Number.isFinite(value)) {
+    return min;
   }
 
-  const now = Date.now();
-  let weightedSum = 0;
-  let weightTotal = 0;
-
-  for (const r of reviews) {
-    const ageDays = (now - new Date(r.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-    const recencyWeight = Math.max(0.3, 1 - ageDays / 180); // recent reviews weigh more
-
-    // Sentiment boost for negative comments
-    const text = (r.text ?? "").toLowerCase();
-    let sentimentBoost = 0;
-    if (text.includes("bad") || text.includes("unsafe") || text.includes("danger")) {
-      sentimentBoost = -0.5;
-    }
-    if (text.includes("good") || text.includes("safe") || text.includes("secure")) {
-      sentimentBoost = +0.2;
-    }
-
-    const rating = r.rating + sentimentBoost;
-    weightedSum += rating * recencyWeight;
-    weightTotal += recencyWeight;
-  }
-
-  const avgRating = weightedSum / weightTotal; // 1..5
-  let score = Math.max(0, Math.min(100, (avgRating - 1) / 4 * 100));
-
-  // Confidence grows with number of reviews
-  const confidence = Math.min(1, Math.log10(reviews.length + 1) / 2);
-
-  // Determine trend
-  const recent = reviews.filter(r => (now - new Date(r.createdAt).getTime()) < 30 * 86400000); // 30d
-  const old = reviews.filter(r => (now - new Date(r.createdAt).getTime()) >= 30 * 86400000);
-  const recentAvg = recent.reduce((a, r) => a + r.rating, 0) / (recent.length || 1);
-  const oldAvg = old.reduce((a, r) => a + r.rating, 0) / (old.length || 1);
-  let trend: "improving" | "declining" | "stable" = "stable";
-  if (recentAvg > oldAvg + 0.5) trend = "improving";
-  else if (recentAvg < oldAvg - 0.5) trend = "declining";
-
-  return { score, confidence, trend };
+  return Math.max(min, Math.min(max, value));
 }

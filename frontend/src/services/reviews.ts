@@ -1,6 +1,6 @@
 // frontend/src/services/reviews.ts
 
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
+import { API_BASE } from "@/lib/api";
 
 export type Review = {
   _id: string;
@@ -33,9 +33,12 @@ export async function fetchReviews(opts?: {
   if (opts?.areaName) params.set("areaName", opts.areaName);
   if (opts?.limit) params.set("limit", String(opts.limit));
 
-  const r = await fetch(`${API}/reviews?${params.toString()}`);
+  const r = await fetch(`${API_BASE}/reviews?${params.toString()}`, {
+    credentials: "include",
+  });
   if (!r.ok) throw new Error("Failed to fetch reviews");
-  return r.json();
+  const data = await r.json();
+  return Array.isArray(data) ? data : data?.reviews ?? data?.items ?? [];
 }
 
 /** Submit a new review, returns the review + updated area safety score */
@@ -44,8 +47,9 @@ export async function submitReview(
   rating: number,
   comment?: string
 ): Promise<ReviewResponse> {
-  const r = await fetch(`${API}/reviews`, {
+  const r = await fetch(`${API_BASE}/reviews`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       areaName: areaName.trim(),

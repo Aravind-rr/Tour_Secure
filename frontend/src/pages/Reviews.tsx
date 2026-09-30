@@ -9,7 +9,6 @@ import Textarea from "@/components/ui/Textarea";
 import Select from "@/components/ui/Select";
 import Loading from "@/components/ui/Loading";
 import Badge from "@/components/ui/Badge";
-import SafetyScoreCard from "@/components/SafetyScoreCard"; // keep if you use it elsewhere on this page
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/context/AuthContext";
 

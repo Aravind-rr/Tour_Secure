@@ -12,38 +12,32 @@ import {
   useState,
   useCallback,
 } from "react";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.heat";
+import { API_BASE } from "@/lib/api";
 
 type ScorePoint = { name?: string; lat: number; lng: number; safety_score: number };
-
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
 /* ---------------- Heat layer ---------------- */
 function HeatLayer({ points }: { points: ScorePoint[] }) {
   const map = useMap();
-  const layerRef = useRef<any>(null);
+  const layerRef = useRef<L.HeatLayer | null>(null);
 
-  const tuples = useMemo(
+  const tuples = useMemo<L.HeatLatLngTuple[]>(
     () => points.map((p) => [p.lat, p.lng, (100 - p.safety_score) / 100]), // lower safety = hotter
     [points]
   );
 
   useEffect(() => {
-    (async () => {
-      const L = (await import("leaflet")).default as any;
-      // @ts-ignore
-      await import("leaflet.heat");
-
-      if (layerRef.current) {
-        map.removeLayer(layerRef.current);
-      }
-      layerRef.current = L.heatLayer(tuples, {
-        radius: 28,
-        blur: 18,
-        maxZoom: 16,
-      }).addTo(map);
-    })();
+    if (layerRef.current) {
+      map.removeLayer(layerRef.current);
+    }
+    layerRef.current = L.heatLayer(tuples, {
+      radius: 28,
+      blur: 18,
+      maxZoom: 16,
+    }).addTo(map);
 
     return () => {
       if (layerRef.current) map.removeLayer(layerRef.current);
@@ -119,13 +113,13 @@ export default function SafetyHeatmap() {
         if (useNearby && coordsRef.current) {
           const { lat, lng } = coordsRef.current;
           const r = await fetch(
-            `${API}/safety-scores/nearby?lat=${lat}&lng=${lng}&radius=50&v=${v}`,
+            `${API_BASE}/safety-scores/nearby?lat=${lat}&lng=${lng}&radius=50&v=${v}`,
             { headers }
           );
           const data = await r.json();
           setPoints(Array.isArray(data) ? data : []);
         } else {
-          const r = await fetch(`${API}/safety-scores?v=${v}`, { headers });
+          const r = await fetch(`${API_BASE}/safety-scores?v=${v}`, { headers });
           const data = await r.json();
           setPoints(Array.isArray(data) ? data : []);
         }
@@ -184,7 +178,7 @@ export default function SafetyHeatmap() {
   // search handler
   const onSearch = () => {
     if (!query.trim()) return;
-    fetch(`${API}/safety-scores/search?q=${encodeURIComponent(query)}`)
+    fetch(`${API_BASE}/safety-scores/search?q=${encodeURIComponent(query)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data?.message || !Array.isArray(data) || data.length === 0) {

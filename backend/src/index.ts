@@ -60,7 +60,6 @@ async function start() {
 
   // ---- Routes ----
   app.use("/api/geo", geoRouter);
-  app.use("/api", miscRouter); // legacy misc endpoints
   app.use("/api/auth", authRoutes);
   app.use("/api/alerts", alertsRoutes);
   app.use("/api/admin", adminRoutes);
@@ -70,6 +69,7 @@ async function start() {
   app.use("/api/efir", efirRouter);
   app.use("/api/digital-id", digitalIdRouter);
   app.use("/api/itinerary", itineraryRoutes); // ✅ itinerary routes
+  app.use("/api", miscRouter); // legacy fallbacks; canonical routes above take precedence
 
   // ---- Debug (only in dev) ----
   if (env.NODE_ENV !== "production") {

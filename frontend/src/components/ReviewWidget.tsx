@@ -1,10 +1,9 @@
 // frontend/src/components/ReviewWidget.tsx
 import { useEffect, useRef, useState } from "react";
 import { submitReview } from "@/services/reviews";
+import { API_BASE } from "@/lib/api";
 
 type Suggestion = { name: string; lat: number; lng: number; safety_score: number };
-
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
 export default function ReviewWidget() {
   const [place, setPlace] = useState("");
@@ -35,7 +34,7 @@ export default function ReviewWidget() {
         const ac = new AbortController();
         suggestAbortRef.current = ac;
 
-        const r = await fetch(`${API}/safety-scores/search?q=${encodeURIComponent(q)}`, {
+        const r = await fetch(`${API_BASE}/safety-scores/search?q=${encodeURIComponent(q)}`, {
           signal: ac.signal,
           headers: { "Cache-Control": "no-store" },
         });
@@ -82,7 +81,7 @@ export default function ReviewWidget() {
 
       // Immediately fetch the backend's current score for this place
       try {
-        const r = await fetch(`${API}/safety-scores/search?q=${encodeURIComponent(p)}`, {
+        const r = await fetch(`${API_BASE}/safety-scores/search?q=${encodeURIComponent(p)}`, {
           headers: { "Cache-Control": "no-store" },
         });
         const data = await r.json();

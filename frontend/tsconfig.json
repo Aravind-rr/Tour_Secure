@@ -7,11 +7,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@services/*": ["../services/*"]   // IMPORTANT: services is outside frontend
+      "@services/*": ["src/services/*"]
     },
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["src", "../services"]
+  "include": ["src"]
 }

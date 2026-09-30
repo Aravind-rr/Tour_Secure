@@ -3,7 +3,7 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 export interface IReview extends Document {
   rating: number;                 // 1..5
   text?: string;
-  areaId?: Types.ObjectId | null; // ref -> SafetyScore
+  area?: Types.ObjectId | null;   // ref -> SafetyScore
   areaName?: string | null;       // denormalized name for quick display
   userId?: Types.ObjectId | null; // author id (optional)
   userName?: string | null;       // denormalized author name for UI
@@ -15,7 +15,7 @@ const ReviewSchema = new Schema<IReview>(
   {
     rating: { type: Number, required: true, min: 1, max: 5 },
     text: { type: String, default: "" },
-    areaId: { type: Schema.Types.ObjectId, ref: "SafetyScore", default: null },
+    area: { type: Schema.Types.ObjectId, ref: "SafetyScore", default: null },
     areaName: { type: String, default: null },
     userId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     userName: { type: String, default: null },

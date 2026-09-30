@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { http } from "@/lib/http";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Login() {
@@ -14,11 +13,7 @@ export default function Login() {
     setError("");
     setBusy(true);
     try {
-      const { data } = await http.post("/auth/login", { email, password }, {
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!data?.token) throw new Error("No token returned");
-      await login(data.token); // stores token & calls /auth/me
+      await login(email, password);
       // optional: navigate to home
       window.location.href = "/";
     } catch (e: any) {

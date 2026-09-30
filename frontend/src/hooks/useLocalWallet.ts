@@ -10,9 +10,13 @@ export default function useLocalWallet() {
 
   const generate12 = useCallback(async () => {
     const mnemonic = bip39.generateMnemonic(128, undefined, bip39.wordlists.english);
-    const hd = HDNodeWallet.fromPhrase(mnemonic, undefined, wordlists.en);
-    const child = hd.derivePath(`m/44'/60'/0'/0/0`);
-    const wallet = new Wallet(child.privateKey);
+    const hd = HDNodeWallet.fromPhrase(
+      mnemonic,
+      undefined,
+      "m/44'/60'/0'/0/0",
+      wordlists.en
+    );
+    const wallet = new Wallet(hd.privateKey);
     setState({ mnemonic, address: wallet.address, wallet });
     return { mnemonic, address: wallet.address };
   }, []);

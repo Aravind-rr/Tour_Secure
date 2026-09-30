@@ -48,7 +48,7 @@ export default function Heatmap() {
         setLoadingZones(true);
         const data = await listZones();
         if (!alive) return;
-        setZones(data as any);
+        setZones(data);
       } catch (e: any) {
         notify({ tone: "error", message: e?.message ?? "Failed to load zones" });
       } finally {
@@ -124,7 +124,7 @@ export default function Heatmap() {
         riskScore: band,
         polygon: { type: "Polygon", coordinates: [ring] },
       });
-      setZones(s => [z as any, ...s]);
+      setZones(s => [z, ...s]);
       setName(""); setCoords(""); setRiskLevel("medium"); setRiskScore(50);
       notify({ tone: "success", title: "Zone added", message: "New zone created successfully." });
     } catch (e: any) {
@@ -194,14 +194,14 @@ export default function Heatmap() {
               <Input
                 className="w-40"
                 type="number" step="0.0001"
-                value={Number.isFinite(lat) ? lat : "" as any}
+                value={Number.isFinite(lat) ? lat : ""}
                 onChange={e => setLat(parseNum(e.target.value) ?? NaN)}
                 placeholder="lat"
               />
               <Input
                 className="w-40"
                 type="number" step="0.0001"
-                value={Number.isFinite(lng) ? lng : "" as any}
+                value={Number.isFinite(lng) ? lng : ""}
                 onChange={e => setLng(parseNum(e.target.value) ?? NaN)}
                 placeholder="lng"
               />

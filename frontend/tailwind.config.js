@@ -1,3 +1,6 @@
+import forms from "@tailwindcss/forms";
+import typography from "@tailwindcss/typography";
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
@@ -18,5 +21,5 @@ export default {
       borderRadius: { '2xl': '1.25rem' },
     },
   },
-  plugins: [require('@tailwindcss/forms'), require('@tailwindcss/typography')],
+  plugins: [forms, typography],
 }

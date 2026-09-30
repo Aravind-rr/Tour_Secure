@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { http } from '@/lib/http';
 import { AlertTriangle, MapPin, Activity, Shield } from "lucide-react";
 import { useHealth } from "@/hooks/useHealth";
-import { API_BASE } from "@/lib/api";
 import { checkPoint, listZones } from "@services/geofencing/geo";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -59,7 +58,7 @@ export default function Home() {
     (async () => {
       try {
         const data = await listZones();
-        setZones(data as any);
+        setZones(data);
       } catch {
         // non-fatal
       }
@@ -141,7 +140,7 @@ export default function Home() {
     setArming(false);
     try {
       // optional backend call; swallow errors if endpoint not present
-      await http.post(`${API_BASE}/alerts/panic`, { lat: coords.lat, lon: coords.lng }).catch(() => {});
+      await http.post("/alerts/panic", { lat: coords.lat, lon: coords.lng }).catch(() => {});
     } finally {
       notify({
         tone: "success",

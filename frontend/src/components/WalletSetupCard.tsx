@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import useLocalWallet from "@/hooks/useLocalWallet";
 import { downloadFile } from "@/utils/download";
+import { API_BASE } from "@/lib/api";
 
 type Props = { userId: string; onSaved?: (address: string) => void };
 
@@ -41,7 +42,7 @@ export default function WalletSetupCard({ userId, onSaved }: Props) {
     setBusy(true);
     setError("");
     try {
-      const r = await fetch("/api/user/wallet", {
+      const r = await fetch(`${API_BASE}/user/wallet`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include", // keep if your backend CORS has credentials: true

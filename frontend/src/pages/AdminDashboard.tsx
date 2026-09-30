@@ -4,7 +4,7 @@ import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import Loading from "@/components/ui/Loading";
 import Button from "@/components/ui/Button";
 
-type EFIR = { _id: string; name: string; contact?: string; description: string; createdAt: string };
+type EFIR = { _id: string; name: string; contact?: string; summary?: string; description?: string; createdAt: string };
 type Alert = { _id: string; userId?: string; lat?: number; lon?: number; createdAt: string; meta?: any };
 
 export default function AdminDashboard() {
@@ -62,7 +62,7 @@ export default function AdminDashboard() {
                   <li key={e._id} className="py-3">
                     <div className="font-medium">{e.name} {e.contact ? <span className="text-xs text-neutral-500">· {e.contact}</span> : null}</div>
                     <div className="text-xs text-neutral-500">{new Date(e.createdAt).toLocaleString()}</div>
-                    <p className="mt-2 text-sm whitespace-pre-wrap">{e.description}</p>
+                    <p className="mt-2 text-sm whitespace-pre-wrap">{e.summary || e.description}</p>
                   </li>
                 ))}
               </ul>
