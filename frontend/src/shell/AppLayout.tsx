@@ -4,9 +4,11 @@ import PageContainer from "@/components/PageContainer";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { http } from "@/lib/http";
+import { SosProvider } from "@/context/SosContext";
+import ChatWidget from "@/components/assistant/ChatWidget";
 
 const linkBase =
-  "px-3 py-1.5 rounded-md text-sm font-medium hover:bg-neutral-100";
+  "px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap hover:bg-neutral-100";
 const linkActive = "bg-neutral-900 text-white hover:bg-neutral-900";
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? `${linkBase} ${linkActive}` : linkBase;
@@ -20,6 +22,13 @@ export default function AppLayout() {
   const [hasItinerary, setHasItinerary] = useState(false);
   const [hasEFIR, setHasEFIR] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setDataVersion((v) => v + 1);
+    window.addEventListener("itinerary:changed", bump);
+    return () => window.removeEventListener("itinerary:changed", bump);
+  }, []);
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -93,9 +102,10 @@ export default function AppLayout() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, dataVersion]);
 
   return (
+    <SosProvider>
     <div className="min-h-dvh flex flex-col">
       {/* Skip to content (a11y) */}
       <a
@@ -110,7 +120,7 @@ export default function AppLayout() {
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center gap-4">
           {/* Mobile menu button */}
           <button
-            className="md:hidden p-2 rounded hover:bg-neutral-100"
+            className="lg:hidden p-2 rounded hover:bg-neutral-100"
             aria-label={open ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={open}
             aria-controls="mobile-nav"
@@ -122,12 +132,18 @@ export default function AppLayout() {
           </button>
 
           {/* Brand */}
-          <div className="text-lg font-semibold">Tour Secure</div>
+          <div className="text-lg font-semibold whitespace-nowrap">Tour Secure</div>
 
           {/* Desktop navigation */}
-          <nav className="hidden md:flex gap-1 ml-4">
+          <nav className="hidden lg:flex gap-1 ml-4">
             <NavLink to="/" end className={linkClass}>
               Home
+            </NavLink>
+            <NavLink to="/explore" className={linkClass}>
+              Explore
+            </NavLink>
+            <NavLink to="/assistant" className={linkClass}>
+              Assistant
             </NavLink>
             <NavLink to="/heatmap" className={linkClass}>
               Heatmap
@@ -151,6 +167,11 @@ export default function AppLayout() {
             <NavLink to="/digital-id" className={linkClass}>
               Digital ID
             </NavLink>
+            {user && (
+              <NavLink to="/safety" className={linkClass}>
+                Safety
+              </NavLink>
+            )}
             <NavLink to="/about" className={linkClass}>
               About
             </NavLink>
@@ -167,7 +188,7 @@ export default function AppLayout() {
             {user && !checking && !hasItinerary && (
               <NavLink
                 to="/itinerary"
-                className="text-xs underline text-neutral-700 hover:text-black"
+                className="hidden 2xl:inline text-xs underline text-neutral-700 hover:text-black"
                 title="Create your first itinerary"
               >
                 Create Itinerary
@@ -176,7 +197,7 @@ export default function AppLayout() {
             {user && !checking && !hasEFIR && (
               <NavLink
                 to="/efir"
-                className="text-xs underline text-neutral-700 hover:text-black"
+                className="hidden 2xl:inline text-xs underline text-neutral-700 hover:text-black"
                 title="File your first e-FIR"
               >
                 File e-FIR
@@ -185,7 +206,7 @@ export default function AppLayout() {
 
             {user ? (
               <>
-                <span className="text-sm text-neutral-600">
+                <span className="hidden xl:inline whitespace-nowrap text-sm text-neutral-600">
                   Hi, {user.name || "User"}
                 </span>
                 <button className="text-sm underline" onClick={handleLogout}>
@@ -202,7 +223,7 @@ export default function AppLayout() {
 
         {/* Mobile drawer */}
         {open && (
-          <div id="mobile-nav" className="md:hidden border-t bg-white">
+          <div id="mobile-nav" className="lg:hidden border-t bg-white">
             <nav className="px-4 py-2 grid gap-1">
               <NavLink
                 to="/"
@@ -214,6 +235,26 @@ export default function AppLayout() {
                 }
               >
                 Home
+              </NavLink>
+              <NavLink
+                to="/explore"
+                className={({ isActive }) =>
+                  isActive
+                    ? "px-3 py-2 rounded-md bg-neutral-900 text-white"
+                    : "px-3 py-2 rounded-md hover:bg-neutral-100"
+                }
+              >
+                Explore
+              </NavLink>
+              <NavLink
+                to="/assistant"
+                className={({ isActive }) =>
+                  isActive
+                    ? "px-3 py-2 rounded-md bg-neutral-900 text-white"
+                    : "px-3 py-2 rounded-md hover:bg-neutral-100"
+                }
+              >
+                Assistant
               </NavLink>
               <NavLink
                 to="/heatmap"
@@ -272,6 +313,18 @@ export default function AppLayout() {
               >
                 Digital ID
               </NavLink>
+              {user && (
+                <NavLink
+                  to="/safety"
+                  className={({ isActive }) =>
+                    isActive
+                      ? "px-3 py-2 rounded-md bg-neutral-900 text-white"
+                      : "px-3 py-2 rounded-md hover:bg-neutral-100"
+                  }
+                >
+                  Safety Center
+                </NavLink>
+              )}
               <NavLink
                 to="/about"
                 className={({ isActive }) =>
@@ -346,6 +399,8 @@ export default function AppLayout() {
       <footer className="border-t py-8 text-center text-sm text-neutral-600">
         © {new Date().getFullYear()} Tour Secure
       </footer>
+      <ChatWidget />
     </div>
+    </SosProvider>
   );
 }

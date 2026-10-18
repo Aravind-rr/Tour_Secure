@@ -26,6 +26,10 @@ import DigitalID from "@/pages/DigitalID";
 import About from "@/pages/About";
 import AuthPage from "@/pages/Auth";
 import AdminDashboard from "@/pages/AdminDashboard";
+import Explore from "@/pages/Explore";
+import Assistant from "@/pages/Assistant";
+import SafetyCenter from "@/pages/SafetyCenter";
+import Track from "@/pages/Track";
 
 // Gate the app until session hydration completes
 function AuthReady({ children }: { children: React.ReactNode }) {
@@ -53,11 +57,15 @@ const router = createBrowserRouter([
       { path: "/heatmap", element: <Heatmap /> },
       { path: "/reviews", element: <Reviews /> },
       { path: "/about", element: <About /> },
+      { path: "/explore", element: <Explore /> },
+      { path: "/assistant", element: <Assistant /> },
+      { path: "/track/:token", element: <Track /> }, // public live-tracking link from SOS shares
 
       // Private (user)
       { path: "/itinerary", element: <RequireAuth><Itinerary /></RequireAuth> },
       { path: "/efir", element: <RequireAuth><EFIR /></RequireAuth> },
       { path: "/digital-id", element: <RequireAuth><DigitalID /></RequireAuth> },
+      { path: "/safety", element: <RequireAuth><SafetyCenter /></RequireAuth> },
 
       // Admin-only
       { path: "/admin", element: <RequireAdmin><AdminDashboard /></RequireAdmin> },

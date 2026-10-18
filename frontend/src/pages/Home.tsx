@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { http } from '@/lib/http';
-import { AlertTriangle, MapPin, Activity, Shield } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, MapPin, Activity, Shield, Compass, Bot, Timer } from "lucide-react";
+import { useSos } from "@/context/SosContext";
+import { getNearby, getSafety, localHour, type PlaceCard, type SafetyInfo } from "@/services/recommendations";
+import { catUi, fmtDistance, DEFAULT_CATEGORIES } from "@/lib/categories";
+import SafetyBadge from "@/components/explore/SafetyBadge";
 import { useHealth } from "@/hooks/useHealth";
 import { checkPoint, listZones } from "@services/geofencing/geo";
 import Button from "@/components/ui/Button";
@@ -38,10 +42,13 @@ export default function Home() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [busy, setBusy] = useState(false);
 
-  // SOS countdown
-  const [arming, setArming] = useState(false);
-  const [seconds, setSeconds] = useState(5);
-  const timerRef = useRef<number | null>(null);
+  // SOS (shared flow: countdown, alert, live tracking & sharing)
+  const sos = useSos();
+  const arming = sos.arming;
+  const seconds = sos.seconds;
+
+  // recommendations near the current point
+  const [recs, setRecs] = useState<PlaceCard[] | null>(null);
 
   // get browser location on mount
   useEffect(() => {
@@ -87,8 +94,21 @@ export default function Home() {
   }, [coords]);
 
   // derived display
-  const score = risk?.riskScore ?? 0;
-  const level = (risk?.riskLevel ?? "low") as RiskLevel;
+  // Safety score (0-100, higher = safer) combining zones, area reviews and time of day.
+  // Previously this card showed the zone's *risk* score, which read backwards.
+  const [safety, setSafety] = useState<SafetyInfo | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getSafety(coords, localHour()).then((s) => alive && setSafety(s));
+    return () => {
+      alive = false;
+    };
+  }, [coords]);
+  const score = safety ? safety.score : risk ? 100 - (risk.riskScore ?? 0) : 0;
+  const level = (safety
+    ? safety.level === "safe" ? "low" : safety.level === "unsafe" ? "high" : "medium"
+    : risk?.riskLevel ?? "low") as RiskLevel; // drives colours (low risk = green)
+  const levelText = safety ? safety.level : level;
   const zoneName = risk?.matchedZones?.[0]?.name ?? (risk?.inside ? "Unnamed Zone" : "—");
 
   const levelColor = useMemo(
@@ -113,49 +133,23 @@ export default function Home() {
     );
   }
 
-  // SOS arming/cancel/confirm
   function armSOS() {
-    if (arming) return;
-    setSeconds(5);
-    setArming(true);
-    timerRef.current = window.setInterval(() => {
-      setSeconds((s) => {
-        if (s <= 1) {
-          clearIntervalIfAny();
-          confirmSOS();
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
+    sos.arm();
   }
 
   function cancelSOS() {
-    clearIntervalIfAny();
-    setArming(false);
-    notify({ tone: "info", title: "SOS Cancelled", message: "No alert was sent." });
+    sos.cancelArm();
   }
 
-  async function confirmSOS() {
-    setArming(false);
-    try {
-      // optional backend call; swallow errors if endpoint not present
-      await http.post("/alerts/panic", { lat: coords.lat, lon: coords.lng }).catch(() => {});
-    } finally {
-      notify({
-        tone: "success",
-        title: "SOS Sent",
-        message: "Location shared with emergency contacts (demo).",
-      });
-    }
-  }
-
-  function clearIntervalIfAny() {
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }
+  useEffect(() => {
+    let alive = true;
+    getNearby({ origin: coords, categories: DEFAULT_CATEGORIES, radiusKm: 15, limit: 4, hour: localHour(), avoidUnsafe: true })
+      .then((r) => alive && setRecs(r.items))
+      .catch(() => alive && setRecs([]));
+    return () => {
+      alive = false;
+    };
+  }, [coords]);
 
   // nearest zones (top 3 by distance to ring centroid; simple, fast)
   const nearest = useMemo(() => {
@@ -227,7 +221,7 @@ export default function Home() {
           <CardBody>
             <div className="flex items-end gap-4">
               <div className="text-5xl font-extrabold leading-none">{busy ? "…" : score}</div>
-              <div className={`text-sm font-semibold ${levelColor}`}>{busy ? "" : level.toUpperCase()}</div>
+              <div className={`text-sm font-semibold ${levelColor}`}>{busy ? "" : levelText.toUpperCase()}</div>
             </div>
             <div className="mt-1 text-xs text-neutral-500">Zone: {zoneName}</div>
 
@@ -285,7 +279,7 @@ export default function Home() {
 
             <div className="mt-3 grid grid-cols-3 gap-3">
               <Metric label="Score" value={busy ? "…" : String(score)} />
-              <Metric label="Level" value={busy ? "…" : level} tone={level} />
+              <Metric label="Level" value={busy ? "…" : levelText} tone={level} />
               <Metric label="Zone" value={busy ? "…" : zoneName} />
             </div>
 
@@ -320,7 +314,7 @@ export default function Home() {
                       <div className={z.riskLevel === "high" ? "text-red-600" : z.riskLevel === "medium" ? "text-yellow-600" : "text-emerald-600"}>
                         {z.riskLevel.toUpperCase()}
                       </div>
-                      <div className="text-neutral-500">Score: {z.riskScore}</div>
+                      <div className="text-neutral-500">Risk: {z.riskScore}/100</div>
                     </div>
                   </li>
                 ))}
@@ -337,6 +331,75 @@ export default function Home() {
               <li>Avoid poorly lit areas at night; prefer main roads.</li>
               <li>Use official taxi apps; share trip with a trusted contact.</li>
             </ul>
+          </CardBody>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-3">
+        <Card className="md:col-span-2">
+          <CardHeader
+            title="Recommended near you"
+            actions={
+              <Link to="/explore" className="inline-flex items-center gap-1 text-sm font-medium underline-offset-2 hover:underline">
+                <Compass size={16} /> Explore all
+              </Link>
+            }
+          />
+          <CardBody>
+            {!recs ? (
+              <div className="text-sm text-neutral-600">Finding places…</div>
+            ) : recs.length === 0 ? (
+              <div className="text-sm text-neutral-600">
+                No catalogued places near this point yet. <Link to="/explore" className="underline">Search a city</Link>.
+              </div>
+            ) : (
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {recs.map((p) => {
+                  const ui = catUi(p.matchedCategory) ?? catUi(p.category);
+                  return (
+                    <li key={p.id} className="flex items-start justify-between gap-2 rounded-xl border p-3">
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium" style={{ color: ui?.color }}>
+                          {ui?.emoji} {ui?.short}
+                        </div>
+                        <a href={p.mapsUrl} target="_blank" rel="noreferrer" className="block truncate font-medium hover:underline">
+                          {p.name}
+                        </a>
+                        <div className="text-xs text-neutral-500">{fmtDistance(p.distanceKm)} away</div>
+                      </div>
+                      <SafetyBadge level={p.safety.level} score={p.safety.score} compact />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader title="Travel smarter" />
+          <CardBody className="space-y-3">
+            <Link to="/assistant" className="flex items-center gap-3 rounded-xl border p-3 hover:bg-neutral-50">
+              <Bot size={20} />
+              <div>
+                <div className="text-sm font-medium">Ask the AI assistant</div>
+                <div className="text-xs text-neutral-500">Plans, places & safety answers</div>
+              </div>
+            </Link>
+            <Link to="/explore?tab=plan" className="flex items-center gap-3 rounded-xl border p-3 hover:bg-neutral-50">
+              <Compass size={20} />
+              <div>
+                <div className="text-sm font-medium">Plan a trip</div>
+                <div className="text-xs text-neutral-500">Day-by-day, safety-aware</div>
+              </div>
+            </Link>
+            <Link to="/safety" className="flex items-center gap-3 rounded-xl border p-3 hover:bg-neutral-50">
+              <Timer size={20} />
+              <div>
+                <div className="text-sm font-medium">Safe check-in timer</div>
+                <div className="text-xs text-neutral-500">Auto-alert if you don't check in</div>
+              </div>
+            </Link>
           </CardBody>
         </Card>
       </div>

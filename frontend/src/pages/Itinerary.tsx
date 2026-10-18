@@ -9,27 +9,35 @@ import Select from "@/components/ui/Select";
 import Loading from "@/components/ui/Loading";
 import Badge from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
-import { MapPin } from "lucide-react";
+import { Link } from "react-router-dom";
+import { MapPin, Trash2, Sparkles, Compass, Bot } from "lucide-react";
+import { ALL_CATEGORIES, CATEGORY_UI, catUi } from "@/lib/categories";
+import SafetyBadge from "@/components/explore/SafetyBadge";
 
 /* ------------ types & API ------------ */
 type Item = {
   _id: string;
   title: string;
   date?: string;        // "YYYY-MM-DD"
+  time?: string;        // "HH:MM"
   location?: string;
   notes?: string;
+  category?: string;
+  done?: boolean;
+  source?: string;
+  safety?: { score: number; level: "safe" | "moderate" | "caution" | "unsafe"; zone: string | null; advice: string[] };
   createdAt: string;
 };
 
 async function fetchItems(): Promise<Item[]> {
-  const { data } = await http.get("/itinerary"); // use shared client
+  const { data } = await http.get("/itinerary", { params: { withSafety: 1 } }); // use shared client
   const arr = Array.isArray(data) ? data : (data?.items ?? []); // always an array
   return (arr as Item[]).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 }
 
-async function createItem(input: { title: string; date?: string; location?: string; notes?: string }) {
+async function createItem(input: { title: string; date?: string; time?: string; location?: string; notes?: string; category?: string }) {
   const { data } = await http.post("/itinerary", input); // use shared client
   return (data?.item ?? data) as Item; // accept either shape
 }
@@ -47,6 +55,8 @@ export default function Itinerary() {
   const [date, setDate] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
+  const [time, setTime] = useState("");
+  const [category, setCategory] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // filters
@@ -55,8 +65,7 @@ export default function Itinerary() {
   const [to, setTo] = useState("");
   const [sort, setSort] = useState<"date-asc" | "date-desc" | "created-desc">("date-asc");
 
-  // client-only “done” status
-  const [done, setDone] = useState<Record<string, boolean>>({});
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -73,7 +82,37 @@ export default function Itinerary() {
       }
     })();
     return () => { alive = false; };
-  }, [notify]);
+  }, [notify, reloadKey]);
+
+  // reload when items are added from Explore / the assistant
+  useEffect(() => {
+    const h = () => setReloadKey((k) => k + 1);
+    window.addEventListener("itinerary:changed", h);
+    return () => window.removeEventListener("itinerary:changed", h);
+  }, []);
+
+  /** Persisted done toggle (optimistic). */
+  async function toggleDone(it: Item) {
+    const next = !it.done;
+    setItems((s) => (s ?? []).map((x) => (x._id === it._id ? { ...x, done: next } : x)));
+    try {
+      await http.patch(`/itinerary/${it._id}`, { done: next });
+    } catch (e: any) {
+      setItems((s) => (s ?? []).map((x) => (x._id === it._id ? { ...x, done: !next } : x)));
+      notify({ tone: "error", message: e?.response?.data?.error || "Could not update item" });
+    }
+  }
+
+  async function removeItem(it: Item) {
+    if (!window.confirm(`Delete "${it.title}" from your itinerary?`)) return;
+    try {
+      await http.delete(`/itinerary/${it._id}`);
+      setItems((s) => (s ?? []).filter((x) => x._id !== it._id));
+      notify({ tone: "success", message: "Item deleted." });
+    } catch (e: any) {
+      notify({ tone: "error", message: e?.response?.data?.error || "Could not delete item" });
+    }
+  }
 
   const filteredSorted = useMemo(() => {
     const data = (items ?? []).slice();
@@ -94,8 +133,10 @@ export default function Itinerary() {
       if (sort === "created-desc") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       const da = a.date ?? "";
       const db = b.date ?? "";
-      if (sort === "date-asc")  return da.localeCompare(db) || a.title.localeCompare(b.title);
-      return db.localeCompare(da) || a.title.localeCompare(b.title);
+      const ta = a.time ?? "99:99";
+      const tb = b.time ?? "99:99";
+      if (sort === "date-asc")  return da.localeCompare(db) || ta.localeCompare(tb) || a.title.localeCompare(b.title);
+      return db.localeCompare(da) || tb.localeCompare(ta) || a.title.localeCompare(b.title);
     });
     return filtered;
   }, [items, q, from, to, sort]);
@@ -121,11 +162,14 @@ export default function Itinerary() {
       const created = await createItem({
         title: title.trim(),
         date: date || undefined,
+        time: time || undefined,
         location: location.trim() || undefined,
         notes: notes.trim() || undefined,
+        category: category || undefined,
       });
       setItems((s) => [created, ...(s ?? [])]);
-      setTitle(""); setDate(""); setLocation(""); setNotes("");
+      setTitle(""); setDate(""); setTime(""); setLocation(""); setNotes(""); setCategory("");
+      setReloadKey((k) => k + 1); // refresh to pick up server-side safety badge
       notify({ tone: "success", title: "Added", message: "Itinerary item created." });
     } catch (e: any) {
       notify({ tone: "error", message: e?.response?.data?.error || e?.message || "Failed to add item" });
@@ -153,9 +197,9 @@ export default function Itinerary() {
   }
 
   function exportCSV() {
-    const rows = [["Title", "Date", "Location", "Notes"]];
+    const rows = [["Title", "Date", "Time", "Category", "Location", "Notes"]];
     (filteredSorted).forEach(it => {
-      rows.push([it.title, it.date ?? "", it.location ?? "", (it.notes ?? "").replace(/\n/g, " ")]);
+      rows.push([it.title, it.date ?? "", it.time ?? "", it.category ?? "", it.location ?? "", (it.notes ?? "").replace(/\n/g, " ")]);
     });
     const csv = rows.map(r => r.map(x => `"${(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     download("itinerary.csv", csv, "text/csv");
@@ -170,12 +214,13 @@ export default function Itinerary() {
     filteredSorted.forEach((it, i) => {
       if (!it.date) return;
       const dt = it.date.replace(/-/g, "");
-      const uid = `${i}-${dt}@tour-secure`;
+      const uid = `${it._id || i}-${dt}@tour-secure`;
+      const tm = it.time && /^\d{2}:\d{2}$/.test(it.time) ? it.time.replace(":", "") + "00" : null;
       lines.push(
         "BEGIN:VEVENT",
         `UID:${uid}`,
         `DTSTAMP:${toUTCString(new Date())}`,
-        `DTSTART;VALUE=DATE:${dt}`,
+        tm ? `DTSTART:${dt}T${tm}` : `DTSTART;VALUE=DATE:${dt}`,
         `SUMMARY:${escapeICS(it.title)}`,
         it.location ? `LOCATION:${escapeICS(it.location)}` : "",
         it.notes ? `DESCRIPTION:${escapeICS(it.notes)}` : "",
@@ -205,7 +250,20 @@ export default function Itinerary() {
 
   return (
     <>
-      <h1 className="page-title">Itinerary</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h1 className="page-title">Itinerary</h1>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/explore?tab=itinerary" className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium hover:bg-neutral-50">
+            <Sparkles size={16} className="text-amber-500" /> Recommendations for my trip
+          </Link>
+          <Link to="/explore?tab=plan" className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium hover:bg-neutral-50">
+            <Compass size={16} /> Auto-plan days
+          </Link>
+          <Link to="/assistant" className="inline-flex items-center gap-1 rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white">
+            <Bot size={16} /> Plan with AI
+          </Link>
+        </div>
+      </div>
 
       {/* Top row: Add + Filters/Export */}
       <div className="grid gap-6 md:grid-cols-3 mt-6">
@@ -218,10 +276,19 @@ export default function Itinerary() {
                 <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 <Button variant="outline" type="button" onClick={quickToday}>Today</Button>
               </div>
-              <Input placeholder="Location (optional)" value={location} onChange={(e) => setLocation(e.target.value)} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Time" className="min-w-0" />
+                <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full min-w-0" aria-label="Category">
+                  <option value="">Category (auto)</option>
+                  {ALL_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{CATEGORY_UI[c].emoji} {CATEGORY_UI[c].label}</option>
+                  ))}
+                </Select>
+              </div>
+              <Input placeholder="Location (city or landmark)" value={location} onChange={(e) => setLocation(e.target.value)} />
               <Textarea placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
               <Button type="submit" disabled={submitting}>{submitting ? "Adding…" : "Add"}</Button>
-              <p className="text-xs text-neutral-500">Tip: Date is optional; you can still sort and export later.</p>
+              <p className="text-xs text-neutral-500">Tip: add a city or landmark so we can show a safety score and nearby ideas.</p>
             </form>
           </CardBody>
         </Card>
@@ -273,7 +340,8 @@ export default function Itinerary() {
                     </header>
                     <ul className="space-y-3">
                       {list.map((it) => {
-                        const isDone = !!done[it._id];
+                        const isDone = !!it.done;
+                        const ui = catUi(it.category);
                         return (
                           <li key={it._id} className="relative">
                             {/* dot */}
@@ -284,8 +352,17 @@ export default function Itinerary() {
                             <div className="rounded-xl border p-4 bg-white">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <div className={`font-semibold truncate ${isDone ? "line-through text-neutral-500" : ""}`}>
-                                    {it.title}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {it.time && <span className="text-xs font-semibold text-neutral-500 tabular-nums">{it.time}</span>}
+                                    <div className={`font-semibold truncate ${isDone ? "line-through text-neutral-500" : ""}`}>
+                                      {it.title}
+                                    </div>
+                                    {ui && (
+                                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${ui.soft}`}>
+                                        {ui.emoji} {ui.short}
+                                      </span>
+                                    )}
+                                    {it.safety && <SafetyBadge level={it.safety.level} score={it.safety.score} title={it.safety.advice?.join(" ") || undefined} />}
                                   </div>
                                   <div className="text-xs text-neutral-500">
                                     {it.location ? (
@@ -305,13 +382,30 @@ export default function Itinerary() {
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                  {!isDone && (
+                                    <Link
+                                      to={`/explore?tab=itinerary&item=${it._id}`}
+                                      className="hidden sm:inline-flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
+                                      title="Recommendations near this stop"
+                                    >
+                                      <Sparkles size={14} /> Ideas nearby
+                                    </Link>
+                                  )}
                                   <Button
                                     variant="outline"
-                                    onClick={() => setDone((s) => ({ ...s, [it._id]: !s[it._id] }))}
+                                    onClick={() => toggleDone(it)}
                                     title={isDone ? "Mark as not done" : "Mark as done"}
                                   >
                                     {isDone ? "Undo" : "Done"}
                                   </Button>
+                                  <button
+                                    onClick={() => removeItem(it)}
+                                    className="rounded-lg p-2 text-neutral-400 hover:bg-red-50 hover:text-red-600"
+                                    aria-label={`Delete ${it.title}`}
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
                                 </div>
                               </div>
                               {it.notes && (
