@@ -40,6 +40,11 @@ services:
       GEOFENCE_URL: http://geofencing:8051
       ANOMALY_URL: http://anomaly:8052
       HARDHAT_RPC: http://blockchain:8545
+      PUBLIC_APP_URL: http://localhost:5173
+      # AI assistant: export ANTHROPIC_API_KEY before `docker compose up` to enable Claude (offline mode otherwise)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     depends_on:
       - db
       - geofencing
