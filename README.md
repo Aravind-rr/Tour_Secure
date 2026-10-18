@@ -29,6 +29,34 @@ docker compose up --build
 
 ---
 
+## ▲ Deploy to Vercel (web app + API on one domain)
+
+The repo is Vercel-ready: `vercel.json` builds the React app as static files and serves the Express API as a single serverless function (`api/index.ts` → `backend/src/app.ts`) under `/api/*` on the **same domain**, so there are no CORS or cross-site cookie issues.
+
+1. **Database** — create a free MongoDB Atlas cluster (M0). Under *Network Access* allow `0.0.0.0/0` (Vercel has no fixed IPs) and copy the connection string.
+2. **Import** — on vercel.com → *Add New → Project* → import this GitHub repo. Keep **Root Directory = `./`**; build settings come from `vercel.json`.
+3. **Environment variables** (Project → Settings → Environment Variables):
+
+   | Name | Value |
+   | --- | --- |
+   | `MONGO_URL` | your Atlas connection string (required) |
+   | `JWT_SECRET` | a long random string (required) |
+   | `ANTHROPIC_API_KEY` | optional — enables the Claude assistant (offline mode otherwise) |
+   | `CRON_SECRET` | optional — protects `/api/cron/sweep-checkins` |
+   | `ALERT_WEBHOOK_URL` | optional — receives every SOS / missed check-in as JSON |
+
+4. **Deploy.** Open `https://<project>.vercel.app` and check `https://<project>.vercel.app/api/health`.
+5. *(Optional)* Seed the safety heatmap: `cd backend && MONGO_URI="<atlas url>" npm run seed:safety`.
+   To get an admin account, set `role: "admin"` on your user document in Atlas.
+
+**Serverless notes**
+- Missed check-ins are escalated opportunistically on API traffic (at most every 30 s). For guaranteed timing, point a scheduler (e.g. cron-job.org every minute, or Vercel Cron on Pro) at `GET /api/cron/sweep-checkins` with `Authorization: Bearer $CRON_SECRET`.
+- Digital-ID document uploads go to `/tmp` on Vercel (ephemeral). Use object storage (S3, Vercel Blob) for durable files.
+- The Hardhat chain and the Python geofencing/anomaly services aren't part of the Vercel deployment (the web app doesn't depend on them); host them separately if needed.
+- Local development and `docker compose` are unchanged (`backend/src/index.ts` still runs a normal server).
+
+---
+
 ## ✨ New features
 
 ### 🧭 Explore — category-wise, safety-aware recommendations (`/explore`)

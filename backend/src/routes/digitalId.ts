@@ -16,12 +16,17 @@ const r = Router();
 const JWT_SECRET = process.env.JWT_SECRET || "changeme";
 const SERVER_BASE_URL =
   process.env.SERVER_BASE_URL || "http://localhost:4000";
+// Serverless platforms (Vercel) only allow writes under /tmp (ephemeral).
 const UPLOAD_DIR =
   process.env.FILE_STORAGE_DIR ||
-  path.join(process.cwd(), "secure_uploads");
+  (process.env.VERCEL ? "/tmp/secure_uploads" : path.join(process.cwd(), "secure_uploads"));
 
-// Ensure upload directory exists
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// Ensure upload directory exists (never crash the whole API if it can't be created)
+try {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+} catch (e: any) {
+  console.warn(`Upload dir ${UPLOAD_DIR} unavailable:`, e?.message || e);
+}
 
 // Multer storage for document uploads
 const storage = multer.diskStorage({

@@ -1,0 +1,5 @@
+# Not needed for the Vercel deployment (web app + API only)
+blockchain
+services
+backend/secure_uploads
+**/.DS_Store

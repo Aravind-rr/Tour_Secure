@@ -93,7 +93,7 @@ export function getEnv(): Env {
 
     JWT_SECRET: required("JWT_SECRET", JWT_SECRET),
     JWT_EXPIRES_DAYS: parseNumber("JWT_EXPIRES_DAYS", JWT_EXPIRES_DAYS, 7),
-    AUTH_COOKIE_NAME: required("AUTH_COOKIE_NAME", AUTH_COOKIE_NAME),
+    AUTH_COOKIE_NAME: (AUTH_COOKIE_NAME && String(AUTH_COOKIE_NAME).trim()) || "toursecure_token",
 
     FILE_STORAGE_DIR,
 

@@ -14,6 +14,10 @@ const SWEEP_EVERY_MS = Number(process.env.CHECKIN_SWEEP_MS || 30_000);
 export function publicAppUrl(): string {
   const explicit = (process.env.PUBLIC_APP_URL || "").trim();
   if (explicit) return explicit.replace(/\/+$/, "");
+  // On Vercel the frontend and API share a domain; use the production domain
+  // (or this deployment's URL for previews) so links work without extra config.
+  const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (vercelHost) return `https://${vercelHost.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
   const firstOrigin = String(process.env.CORS_ORIGINS || "").split(",")[0]?.trim();
   return (firstOrigin || "http://localhost:5173").replace(/\/+$/, "");
 }
@@ -113,6 +117,24 @@ export async function sweepOverdueCheckIns(now = new Date()): Promise<number> {
     }
   }
   return escalated;
+}
+
+/**
+ * Serverless-friendly sweep: runs at most every 30 s (per warm instance),
+ * waiting no longer than `maxWaitMs` so it never noticeably delays a request.
+ */
+let lastSweep = 0;
+export async function maybeSweepCheckIns(maxWaitMs = 1500): Promise<void> {
+  const now = Date.now();
+  if (now - lastSweep < 30_000) return;
+  lastSweep = now;
+  const run = sweepOverdueCheckIns().then(
+    (n) => {
+      if (n) console.log(`⏱️  escalated ${n} missed check-in(s)`);
+    },
+    (e) => console.error("check-in sweep error:", e?.message || e)
+  );
+  await Promise.race([run, new Promise((r) => setTimeout(r, maxWaitMs))]);
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;

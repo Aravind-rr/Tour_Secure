@@ -1,7 +1,9 @@
 // frontend/src/lib/api.ts
+// Production builds (e.g. Vercel, where the API is served from the same domain)
+// default to the relative "/api"; local dev defaults to the Docker backend.
 export const API_BASE =
   import.meta.env.VITE_API_BASE?.replace(/\/+$/, "") ||
-  "http://localhost:8080/api";
+  (import.meta.env.PROD ? "/api" : "http://localhost:8080/api");
 
 // Backwards-compatible name used by older modules.
 export const API_URL = API_BASE;
