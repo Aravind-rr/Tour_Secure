@@ -18,7 +18,13 @@ export function calculateSafety(
 ): number {
   const crime = clamp(crimeRate, 0, 100);
   const infra = clamp(infraScore, 0, 100);
-  const sent = clamp(sentiment, 0, 100);
+  // Seed data / the SafetyScore model store sentiment on a -1..+1 scale,
+  // while some callers pass 0..100. Normalise the former onto 0..100 so a
+  // neutral sentiment contributes 50 instead of being clamped to 0.
+  const sent =
+    Number.isFinite(sentiment) && Math.abs(sentiment) <= 1
+      ? (sentiment + 1) * 50
+      : clamp(sentiment, 0, 100);
 
   // Higher crime reduces safety.
   const crimeSafety = 100 - crime;
