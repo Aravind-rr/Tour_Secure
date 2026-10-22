@@ -2,6 +2,10 @@ import mongoose from "mongoose";
 import Review from "../models/Review";
 import SafetyScore from "../models/SafetyScore";
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Advanced algorithm:
  * - More weight to recent reviews
@@ -16,12 +20,15 @@ export async function recomputeAreaFromReviews(areaKey: string) {
   // Find area by id or by name
   const area = mongoose.isValidObjectId(key)
     ? await SafetyScore.findById(key)
-    : await SafetyScore.findOne({ name: { $regex: `^${key}$`, $options: "i" } });
+    : await SafetyScore.findOne({ name: { $regex: `^${escapeRegExp(key)}$`, $options: "i" } });
 
   if (!area) return;
 
   const reviews = await Review.find({
-    $or: [{ area: area._id }, { areaName: { $regex: `^${area.name}$`, $options: "i" } }],
+    $or: [
+      { area: area._id },
+      { areaName: { $regex: `^${escapeRegExp(area.name)}$`, $options: "i" } },
+    ],
   }).sort({ createdAt: -1 }).lean();
 
   if (!reviews.length) {

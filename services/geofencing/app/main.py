@@ -21,6 +21,10 @@ def load_zones()->List[Dict[str,Any]]:
 
 ZONES = load_zones()
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 def score_for_point(lat: float, lon: float):
     p = Point(lon, lat)
     for z in ZONES:

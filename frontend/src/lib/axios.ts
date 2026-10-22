@@ -7,16 +7,6 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-// Attach Bearer from localStorage
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("auth_token");
-  if (token) {
-    config.headers = config.headers || {};
-    (config.headers as any).Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
 // ✅ Make 401s from *public* endpoints silent
 const PUBLIC_PATHS = [
   "/api/auth/login",

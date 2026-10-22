@@ -85,7 +85,14 @@ export async function createAlert(input: {
     alert: { id: String(alert._id), type: input.type, lat: input.lat ?? null, lon: input.lon ?? null, createdAt: alert.createdAt, trackUrl: url },
     user: { id: input.userId, name: user?.name ?? null, email: user?.email ?? null },
     contacts: (user?.emergencyContacts ?? []).map((c: any) => ({ name: c.name, phone: c.phone, email: c.email ?? null })),
-  }).then((ok) => ok && Alert.updateOne({ _id: alert._id }, { $set: { notifiedWebhook: true } }).catch(() => {}));
+  }).then((ok) => {
+    if (ok) {
+      return Alert.updateOne(
+        { _id: alert._id },
+        { $set: { notifiedWebhook: true } }
+      ).catch(() => {});
+    }
+  });
 
   return { alert, trackUrl: url, shareText: text, contacts: user?.emergencyContacts ?? [] };
 }

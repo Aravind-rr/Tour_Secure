@@ -35,24 +35,34 @@ const points = [
 async function main() {
   if (!process.env.MONGO_URI) throw new Error("MONGO_URI missing in .env");
   await mongoose.connect(process.env.MONGO_URI);
-  console.log("Connected to MongoDB Atlas");
+  console.log("Connected to MongoDB");
 
   // dynamic import so script runs standalone
   // Ensure model index exists
   await SafetyScore.syncIndexes?.().catch(() => {});
 
-  // wipe + insert
-  await SafetyScore.deleteMany({});
-  await SafetyScore.insertMany(points.map(p => ({
-    name: p.name,
-    crimeRate: p.crimeRate,
-    infraScore: p.infraScore,
-    sentiment: p.sentiment,
-    loc: { type: "Point", coordinates: [p.lng, p.lat] },
-    timestamp: new Date(),
-  })));
+  // Idempotent startup seed: add missing locations without overwriting review
+  // statistics or operator changes in an existing persistent database.
+  await SafetyScore.bulkWrite(
+    points.map((p) => ({
+      updateOne: {
+        filter: { name: p.name },
+        update: {
+          $setOnInsert: {
+            name: p.name,
+            crimeRate: p.crimeRate,
+            infraScore: p.infraScore,
+            sentiment: p.sentiment,
+            loc: { type: "Point", coordinates: [p.lng, p.lat] },
+            timestamp: new Date(),
+          },
+        },
+        upsert: true,
+      },
+    }))
+  );
 
-  console.log(`✅ Seeded ${points.length} locations into safetyscores`);
+  console.log(`Ensured ${points.length} locations exist in safetyscores`);
   await mongoose.disconnect();
 }
 

@@ -6,11 +6,12 @@ RUN apt-get update -y && apt-get install -y openssl libssl3 && rm -rf /var/lib/a
 
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 
-RUN npm install
+RUN npm ci
 
 COPY tsconfig.json ./
 
 COPY src ./src
+COPY scripts ./scripts
 
 RUN npm run build
 

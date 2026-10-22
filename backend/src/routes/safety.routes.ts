@@ -4,6 +4,10 @@ import { calculateSafety } from "../utils/safety";
 
 const router = Router();
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /** Helper: shape a SafetyScore doc into the API point (with guards). */
 function toPoint(r: any) {
   const lat = r?.loc?.coordinates?.[1];
@@ -65,11 +69,12 @@ router.get("/search", async (req, res, next) => {
   try {
     const q = (req.query.q as string | undefined)?.trim();
     if (!q) return res.status(400).json({ error: "q is required" });
+    const escaped = escapeRegExp(q);
 
     // exact → starts-with → contains
-    const exact = await SafetyScore.find({ name: { $regex: `^${q}$`, $options: "i" } }).limit(10);
-    const starts = await SafetyScore.find({ name: { $regex: `^${q}[,\\s]?.*`, $options: "i" } }).limit(20);
-    const contains = await SafetyScore.find({ name: { $regex: q, $options: "i" } }).limit(20);
+    const exact = await SafetyScore.find({ name: { $regex: `^${escaped}$`, $options: "i" } }).limit(10);
+    const starts = await SafetyScore.find({ name: { $regex: `^${escaped}[,\\s]?.*`, $options: "i" } }).limit(20);
+    const contains = await SafetyScore.find({ name: { $regex: escaped, $options: "i" } }).limit(20);
 
     // merge unique by _id
     const seen = new Set<string>();

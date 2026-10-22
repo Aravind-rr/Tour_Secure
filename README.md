@@ -1,143 +1,239 @@
-# Tour Secure Pro Monorepo (Extended Scaffold)
+# Tour Secure
 
-A richer, runnable scaffold for **Smart Tourist Safety Monitoring & Incident Response System**.
+Tour Secure is a tourist-safety platform with a React frontend, Express API,
+MongoDB, geofencing and anomaly-detection services, and a local Hardhat
+blockchain. Docker Compose is the supported way to run the complete local
+stack.
 
-## Apps & Services
-- **frontend/** (React + TypeScript + Tailwind) – Multi-tab UI (Home, Explore, AI Assistant, Heatmap, Reviews, Itinerary, eFIR, Digital ID, Safety Center, About) with SOS, safety scores, and API wiring.
-- **backend/** (Node + Express + TypeScript + Mongoose) – Users, reviews, itineraries, zones, e-FIRs, alerts, safety scores, Digital IDs, recommendations, AI assistant, check-ins.
-- **db** (MongoDB) – Persistent application data for the backend.
-- **services/geofencing/** (FastAPI) – Configurable GeoJSON-like zones (from `zones.json`), polygon containment & distance fallback.
-- **services/anomaly/** (FastAPI) – Rule-based route checks (deviation & inactivity) with extension points for ML models.
-- **blockchain/** (Hardhat + Solidity) – Local chain and `TouristID` contract deployment.
-- **docker-compose.yml** – One command to run all services.
+## Services
 
-## Quick Start
-```bash
-# optional: enable the Claude-powered assistant (otherwise it runs in offline mode)
-export ANTHROPIC_API_KEY=sk-ant-...
+| Service | Technology | Local URL |
+| --- | --- | --- |
+| Frontend | React + Vite | http://localhost:5173 |
+| Backend API | Express + TypeScript | http://localhost:8080/api |
+| API health | Express | http://localhost:8080/api/health |
+| Geofencing | FastAPI | http://localhost:8051/docs |
+| Anomaly detection | FastAPI | http://localhost:8052/docs |
+| Blockchain RPC | Hardhat | http://localhost:8545 |
+| Database | MongoDB | Internal Docker network only |
 
-docker compose up --build
-# Frontend: http://localhost:5173
-# Backend:  http://localhost:8080/api
+MongoDB data and uploaded Digital-ID documents are stored in named Docker
+volumes, so normal stops, restarts, and image rebuilds do not erase them.
+
+## Requirements
+
+- Docker Desktop with Docker Compose
+- Ports `5173`, `8080`, `8051`, `8052`, and `8545` available
+- Git, if cloning the repository
+
+Node.js, Python, MongoDB, and Hardhat do not need to be installed on the host
+for the Docker workflow.
+
+## Start the complete project
+
+From the repository root:
+
+```powershell
+docker compose up -d --build --wait
 ```
 
-### Notes
-- MongoDB data is stored in the `db_data` Docker volume and accessed through Mongoose.
-- Hardhat starts a local node and deploys `TouristID` on boot.
-- Geofencing reads `services/geofencing/app/zones.json` (edit & restart to change scores).
-- Backend unit tests (no DB needed): `cd backend && npm test`.
+This single command:
 
----
+1. Builds all application images.
+2. Starts MongoDB and waits for it to become healthy.
+3. Adds the sample safety locations if they are missing.
+4. Starts the Python services and local blockchain.
+5. Deploys the `TouristID` contract from the bundled offline artifact.
+6. Starts the backend only after its dependencies are healthy.
+7. Starts the frontend only after the backend is healthy.
 
-## ▲ Deploy to Vercel (web app + API on one domain)
+Open http://localhost:5173 after the command completes.
 
-The repo is Vercel-ready: `vercel.json` builds the React app as static files and serves the Express API as a single serverless function (`api/index.ts` → `backend/src/app.ts`) under `/api/*` on the **same domain**, so there are no CORS or cross-site cookie issues.
+The assistant works in offline mode by default. To enable Claude, create an
+uncommitted `.env` file in the repository root:
 
-1. **Database** — create a free MongoDB Atlas cluster (M0). Under *Network Access* allow `0.0.0.0/0` (Vercel has no fixed IPs) and copy the connection string.
-2. **Import** — on vercel.com → *Add New → Project* → import this GitHub repo. Keep **Root Directory = `./`**; build settings come from `vercel.json`.
-3. **Environment variables** (Project → Settings → Environment Variables):
+```dotenv
+ANTHROPIC_API_KEY=your_key_here
+JWT_SECRET=replace_with_a_long_random_value
+```
 
-   | Name | Value |
-   | --- | --- |
-   | `MONGO_URL` | your Atlas connection string (required) |
-   | `JWT_SECRET` | a long random string (required) |
-   | `ANTHROPIC_API_KEY` | optional — enables the Claude assistant (offline mode otherwise) |
-   | `CRON_SECRET` | optional — protects `/api/cron/sweep-checkins` |
-   | `ALERT_WEBHOOK_URL` | optional — receives every SOS / missed check-in as JSON |
+Then run the same start command again. Never commit `.env` files or API keys.
 
-4. **Deploy.** Open `https://<project>.vercel.app` and check `https://<project>.vercel.app/api/health`.
-5. *(Optional)* Seed the safety heatmap: `cd backend && MONGO_URI="<atlas url>" npm run seed:safety`.
-   To get an admin account, set `role: "admin"` on your user document in Atlas.
+## Stop the project
 
-**Serverless notes**
-- Missed check-ins are escalated opportunistically on API traffic (at most every 30 s). For guaranteed timing, point a scheduler (e.g. cron-job.org every minute, or Vercel Cron on Pro) at `GET /api/cron/sweep-checkins` with `Authorization: Bearer $CRON_SECRET`.
-- Digital-ID document uploads go to `/tmp` on Vercel (ephemeral). Use object storage (S3, Vercel Blob) for durable files.
-- The Hardhat chain and the Python geofencing/anomaly services aren't part of the Vercel deployment (the web app doesn't depend on them); host them separately if needed.
-- Local development and `docker compose` are unchanged (`backend/src/index.ts` still runs a normal server).
+```powershell
+docker compose down
+```
 
----
+This stops and removes the project containers and network while preserving
+MongoDB data and uploaded documents.
 
-## ✨ New features
+To restart later, use the same start command:
 
-### 🧭 Explore — category-wise, safety-aware recommendations (`/explore`)
-Categories: **Historic & Heritage, Entertainment, Fun & Adventure, Food & Drink, Nature, Spiritual, Shopping**.
+```powershell
+docker compose up -d --build --wait
+```
 
-| Tab | What it does |
-| --- | --- |
-| **Near me** | Ranks places around your GPS position (or any searched city/landmark) by interest match, distance, popularity, **area safety** and **time of day**. Results are shown as a mixed "Top picks" list, per-category sections and a colour-coded map. "Hide low-safety places" removes places inside high-risk zones. |
-| **From my itinerary** | Learns an interest profile from your saved itinerary (e.g. *70% historic, 30% food*), suggests places near **each stop**, a "For you" list, and ideas for categories your trip doesn't cover yet. Already-planned places are excluded. |
-| **Plan a trip** | Generates a timed **day-by-day plan** (1–7 days, relaxed/balanced/packed) with lunch/dinner slots, travel estimates and nearest-neighbour routing. Save the whole trip — or a single day — to your itinerary in one click. |
+### Permanently reset all local data
 
-Places come from a curated catalogue (~120 landmarks, eateries and attractions across Chennai, Guwahati, Shillong, Gangtok, Delhi, Mumbai, Jaipur, Agra, Kolkata) and, when the server has internet, **live OpenStreetMap POIs** via the Overpass API (cached, with automatic fallback). Free-text locations are geocoded offline first, then via Nominatim.
+The following command deletes the database and uploaded-document volumes. Use
+it only when a complete reset is intended:
 
-### 🤖 AI assistant (`/assistant` + floating chat bubble on every page)
-- Uses **Claude** (Anthropic Messages API with tool use) when `ANTHROPIC_API_KEY` is set; otherwise an **offline rule-based engine** answers using the same tools — so it always works in demos.
-- Tools: area safety lookup, category recommendations, trip planning, read/add itinerary items, emergency numbers, nearest police/hospital, and in-app action buttons (SOS, e-FIR, check-in…).
-- Replies render place cards and full plans you can save directly. Emergency messages ("someone is following me") immediately surface **Call 112** and **SOS** buttons.
-- Falls back to offline mode automatically if the AI API is unreachable; per-user rate limiting protects the key.
+```powershell
+docker compose down -v
+```
 
-### 🚨 SOS with live tracking
-- Shared SOS flow (Home button, Safety Center, assistant) with a 5-second cancel countdown.
-- Each alert gets a **public live-tracking link** (`/track/:token`, expires after 24 h) that keeps updating while the alert is open.
-- One-tap **WhatsApp / SMS / Call** to your emergency contacts with the link; "I'm safe" / "False alarm" to close.
-- Guests are guided to call 112 instead of getting a false "SOS sent".
-- Optional `ALERT_WEBHOOK_URL` receives every alert as JSON (Slack/Discord/Teams/Twilio Functions, etc.).
+## First account and administrator setup
 
-### ⏱️ Safe check-in timer (Safety Center, `/safety`)
-Start a timer before a night ride or trek. If you don't tap **I'm safe** before it runs out, a background sweeper escalates it into an alert with your last known location. Late check-ins resolve the alert.
+1. Open http://localhost:5173/login.
+2. Select **Create an account** and register normally.
+3. To grant that user administrator access, open MongoDB's shell:
 
-### 👥 Emergency contacts & travel preferences
-Up to 5 contacts (validated), plus preferred categories and "avoid unsafe" default — used by Explore, the planner and the assistant.
+```powershell
+docker compose exec db mongosh toursecure
+```
 
-### 🗓️ Itinerary upgrades
-Category & time fields, **persisted done status** (was client-only), delete, auto-geocoding, per-item **safety badges**, "Ideas nearby" links, bulk save, timed ICS export.
+At the MongoDB prompt, run:
 
-### 🛠️ Control room (Admin)
-Alerts now show type (SOS / missed check-in), status workflow (**open → acknowledged → resolved**), user + contacts, live-track link; plus a list of active check-ins.
+```javascript
+db.users.updateOne(
+  { email: "your-email@example.com" },
+  { $set: { role: "admin" } }
+)
+```
 
-### 🐛 Fixes along the way
-- `calculateSafety` now treats the seed data's `-1..+1` sentiment as a scale (it was clamped to 0).
-- Home "Your Safety Score" now shows a real safety score (higher = safer) instead of the zone's *risk* score.
-- `walletAddress` / `blockchainAddress` were missing from the User schema (silently dropped by Mongoose).
-- CORS now allows the `Cache-Control` header the heatmap sends (preflight was rejected cross-origin).
-- SOS countdown no longer risks firing twice under React StrictMode; JSON error handler instead of HTML stack traces.
+Then type `exit` and sign in again so the new role is included in the session.
 
----
+## Verify the installation
 
-## Configuration (backend)
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `ANTHROPIC_API_KEY` | – | Enables the Claude assistant engine |
-| `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Model id for the assistant |
-| `ASSISTANT_RATE_PER_MIN` | `20` | Chat requests per user/IP per minute |
-| `ENABLE_OSM` / `OVERPASS_URL` | `true` / overpass-api.de | Live OpenStreetMap places |
-| `ENABLE_GEOCODER` / `GEOCODER_URL` | `true` / Nominatim | Online geocoding fallback |
-| `PUBLIC_APP_URL` | first `CORS_ORIGINS` entry | Base URL for live-tracking links |
-| `ALERT_WEBHOOK_URL` | – | POST every new alert as JSON |
-| `CHECKIN_GRACE_SECONDS` | `120` | Grace period before a missed check-in escalates |
-| `ALERT_SHARE_TTL_HOURS` | `24` | Tracking-link lifetime |
+Check container health:
 
-## API Map (selected)
-- `GET /api/health`
-- `GET /api/safety-scores`
-- `GET /api/safety-scores/nearby?lat=..&lng=..&radius=..`
-- `POST /api/alerts/panic` → `{ id, trackUrl, shareText, contacts }`
-- `POST /api/alerts/:id/location` · `POST /api/alerts/:id/cancel` · `GET /api/alerts/mine`
-- `GET /api/alerts/track/:token` (public live tracking)
-- `POST /api/efir` { name, contact, description }
-- `GET /api/geo/zones` / `POST /api/geo/zones`
-- `POST /api/geo/check`
-- `GET /api/reviews` / `POST /api/reviews`
-- `GET /api/itinerary[?withSafety=1]` / `POST /api/itinerary` / `POST /api/itinerary/bulk` / `PATCH|DELETE /api/itinerary/:id`
-- `GET /api/digital-id/me` / `POST /api/digital-id/create`
-- `GET /api/recommendations/categories`
-- `GET /api/recommendations/nearby?lat=&lng=|location=&categories=historic,food&radius=15&hour=18&avoidUnsafe=1`
-- `GET /api/recommendations/itinerary?categories=&perStop=4` (auth)
-- `POST /api/recommendations/plan` { location | lat,lng, days, categories, pace, startDate, avoidUnsafe }
-- `GET /api/recommendations/geocode?q=` · `GET /api/recommendations/safety?lat=&lng=&hour=`
-- `GET /api/assistant/status` · `POST /api/assistant/chat` { messages, context: { lat, lng, hour, localTime, page } }
-- `POST /api/checkins` { minutes, label } · `GET /api/checkins/active` · `POST /api/checkins/:id/(complete|extend|ping|cancel)`
-- `GET /api/profile` · `PUT /api/profile/contacts` · `PUT /api/profile/preferences`
-- `GET /api/admin/alerts` · `PATCH /api/admin/alerts/:id` · `GET /api/admin/checkins` (admin)
+```powershell
+docker compose ps
+```
 
-This is a **developer-friendly baseline**: everything compiles & runs; you can grow features incrementally.
+The six long-running services should show `Up` and `healthy`. The `seed`
+service is a one-time job and should show `Exited (0)` under:
+
+```powershell
+docker compose ps -a
+```
+
+Useful checks:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/api/health
+Invoke-RestMethod "http://localhost:8080/api/recommendations/nearby?location=Jaipur&categories=historic,food"
+Invoke-RestMethod http://localhost:8051/health
+Invoke-RestMethod http://localhost:8052/health
+```
+
+On macOS/Linux, the equivalent health check is:
+
+```bash
+curl http://localhost:8080/api/health
+```
+
+## Functional checklist
+
+After registering or signing in, verify:
+
+- **Digital ID:** open Digital ID, create an ID, refresh its QR, and revisit the
+  page after a browser refresh.
+- **Reviews:** submit a review for a new or existing place, refresh the page,
+  and confirm the previous review remains visible.
+- **Explore:** load nearby recommendations and generate a two-day Jaipur plan.
+- **Itinerary:** save the plan, refresh the page, and confirm it persists.
+- **Assistant:** try `Recommend historic places near me` and
+  `Plan 2 days in Gangtok`.
+- **Heatmap:** search for Shillong and enable `Debug: Points & Scores`.
+- **Safety Center:** add an emergency contact, start and complete a check-in,
+  and create a test SOS alert.
+- **Admin:** confirm `/admin` shows alerts and e-FIR records for an account whose
+  MongoDB role is `admin`.
+
+## Logs and troubleshooting
+
+Show all service logs:
+
+```powershell
+docker compose logs -f
+```
+
+Show one service:
+
+```powershell
+docker compose logs -f backend
+docker compose logs -f blockchain
+```
+
+If a port is already in use on Windows:
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 5173,8080,8051,8052,8545 |
+  Select-Object LocalAddress,LocalPort,OwningProcess
+```
+
+Identify the process before stopping it. For Docker containers, use:
+
+```powershell
+docker ps --format "table {{.Names}}\t{{.Ports}}"
+docker stop <conflicting-container-name>
+```
+
+Do not run a second MongoDB container for this project. The Compose MongoDB is
+the authoritative database and intentionally is not published to a host port,
+which avoids collisions and accidental use of the wrong database.
+
+If images or configuration changed:
+
+```powershell
+docker compose up -d --build --force-recreate --wait
+```
+
+## Development checks
+
+Docker is the runtime workflow, but local Node.js can be used for checks:
+
+```powershell
+cd backend
+npm install
+npm test
+npm run build
+
+cd ../frontend
+npm install
+npm run build
+```
+
+The root `package.json` is not used to run the application.
+
+## Main features
+
+- Cookie-based registration, login, and user/admin authorization
+- Persistent reviews and safety-score heatmap
+- GPS-aware recommendations and multi-day trip planning
+- Saved itineraries and e-FIR reports
+- Digital Trip ID with time-limited QR codes and persistent document uploads
+- Emergency contacts, SOS live tracking, and safe check-in timers
+- AI assistant with offline fallback and optional Anthropic integration
+- GeoJSON risk zones and route anomaly detection
+- Local Hardhat blockchain with the `TouristID` contract
+
+## Production notes
+
+The repository also supports Vercel for the React frontend and Express API.
+Production requires MongoDB Atlas and strong secrets. The local Hardhat chain
+and Python services are not hosted by Vercel and must be deployed separately if
+they are required in production.
+
+Required production variables include:
+
+- `MONGO_URL`
+- `JWT_SECRET`
+- `ANTHROPIC_API_KEY` (optional)
+- `ALERT_WEBHOOK_URL` (optional)
+- `CRON_SECRET` (optional)
+
+Never use the bundled Hardhat development private key or local JWT default in a
+public or production deployment.

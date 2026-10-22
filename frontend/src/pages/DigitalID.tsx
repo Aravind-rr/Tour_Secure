@@ -37,7 +37,7 @@ type DigitalId = {
 
 export default function DigitalIDPage() {
   const { notify } = useToast();
-  const { user, refresh } = useAuth();
+  const { user } = useAuth();
   const nav = useNavigate();
 
   // page state
@@ -77,8 +77,6 @@ export default function DigitalIDPage() {
     (async () => {
       setLoading(true);
       try {
-        // ensure session is fresh (cookie-based)
-        await refresh().catch(() => {});
         const current = await getMyDigitalId();
         if (!alive) return;
         setDigitalId(current);

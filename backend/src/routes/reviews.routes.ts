@@ -13,6 +13,10 @@ function clean(s: string) {
   return String(s || "").replace(/\s+/g, " ").trim();
 }
 
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function pickPlaceName(body: any) {
   return clean(
     body?.areaName ??
@@ -23,31 +27,21 @@ function pickPlaceName(body: any) {
   );
 }
 
-async function findOrCreateArea(name: string) {
+async function findArea(name: string) {
   const q = clean(name);
   if (!q) return null;
+  const escaped = escapeRegExp(q);
 
   // exact match
-  let doc = await SafetyScore.findOne({ name: { $regex: `^${q}$`, $options: "i" } });
+  let doc = await SafetyScore.findOne({ name: { $regex: `^${escaped}$`, $options: "i" } });
   if (doc) return doc;
 
   // starts-with
-  doc = await SafetyScore.findOne({ name: { $regex: `^${q}[,\\s]?.*`, $options: "i" } });
+  doc = await SafetyScore.findOne({ name: { $regex: `^${escaped}[,\\s]?.*`, $options: "i" } });
   if (doc) return doc;
 
   // contains
-  doc = await SafetyScore.findOne({ name: { $regex: q, $options: "i" } });
-  if (doc) return doc;
-
-  // auto-create new SafetyScore if not found
-  return SafetyScore.create({
-    name: q,
-    ratingCount: 0,
-    ratingSum: 0,
-    sentiment: 0,
-    infraScore: 50,
-    crimeRate: 50,
-  });
+  return SafetyScore.findOne({ name: { $regex: escaped, $options: "i" } });
 }
 
 function toClientReview(r: any) {
@@ -90,13 +84,14 @@ router.post("/", requireAuth, async (req: AuthedRequest, res, next) => {
       return res.status(400).json({ error: "Rating must be between 1 and 5." });
     }
 
-    // resolve or create area
+    // Link known safety areas. Free-text places remain valid reviews without
+    // fabricating map coordinates for a new SafetyScore document.
     let areaDoc: any = null;
     if (areaIdRaw) {
       areaDoc = await SafetyScore.findById(areaIdRaw);
       if (!areaDoc) return res.status(404).json({ error: "Area not found for areaId." });
     } else {
-      areaDoc = await findOrCreateArea(nameRaw);
+      areaDoc = await findArea(nameRaw);
     }
 
     // current user (from requireAuth)
@@ -159,7 +154,7 @@ router.get("/", async (req, res, next) => {
 
     const filter: any = {};
     if (areaId) filter.area = areaId;
-    if (areaName) filter.areaName = new RegExp(`^${areaName}$`, "i");
+    if (areaName) filter.areaName = new RegExp(`^${escapeRegExp(areaName)}$`, "i");
 
     // populate area so we can fallback to area.name if areaName missing
     const items = await Review.find(filter)

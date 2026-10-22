@@ -1,67 +1,130 @@
 services:
   db:
     image: mongo:7
-    ports:
-      - "27017:27017"
+    restart: unless-stopped
     volumes:
       - db_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
 
   geofencing:
     build: ./services/geofencing
+    restart: unless-stopped
     ports:
       - "8051:8051"
-    volumes:
-      - ./services/geofencing/app:/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8051/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
 
   anomaly:
     build: ./services/anomaly
+    restart: unless-stopped
     ports:
       - "8052:8052"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8052/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
 
   blockchain:
     build: ./blockchain
-    working_dir: /app
-    command: bash -lc "npx hardhat node & sleep 5 && npx hardhat run scripts/deploy.ts --network localhost && tail -f /dev/null"
+    restart: unless-stopped
     ports:
       - "8545:8545"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8545',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'eth_getCode',params:['0x5FbDB2315678afecb367f032d93F642f64180aa3','latest'],id:1})}).then(r=>r.json()).then(j=>{if(!j.result||j.result==='0x')process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  seed:
+    build: ./backend
+    restart: "no"
+    command: ["npm", "run", "seed:safety"]
+    environment:
+      MONGO_URI: mongodb://db:27017/toursecure
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   backend:
     build: ./backend
+    restart: unless-stopped
     ports:
       - "8080:4000"
     environment:
+      PORT: 4000
+      NODE_ENV: development
       MONGO_URL: mongodb://db:27017/toursecure
-      JWT_SECRET: toursecure-dev-secret
+      JWT_SECRET: ${JWT_SECRET:-toursecure-local-development-secret-change-in-production}
       AUTH_COOKIE_NAME: toursecure_token
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       SERVER_BASE_URL: http://localhost:8080
+      PUBLIC_APP_URL: http://localhost:5173
+      FILE_STORAGE_DIR: /usr/src/app/secure_uploads
       GEOFENCE_URL: http://geofencing:8051
       ANOMALY_URL: http://anomaly:8052
       HARDHAT_RPC: http://blockchain:8545
-      PUBLIC_APP_URL: http://localhost:5173
-      # AI assistant: export ANTHROPIC_API_KEY before `docker compose up` to enable Claude (offline mode otherwise)
+      BLOCKCHAIN_RPC: http://blockchain:8545
+      CONTRACT_ADDRESS: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+      BLOCKCHAIN_PRIVATE_KEY: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    volumes:
+      - backend_uploads:/usr/src/app/secure_uploads
     depends_on:
-      - db
-      - geofencing
-      - anomaly
-      - blockchain
+      db:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+      geofencing:
+        condition: service_healthy
+      anomaly:
+        condition: service_healthy
+      blockchain:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
     ports:
       - "5173:5173"
     environment:
       VITE_API_BASE: http://localhost:8080/api
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      VITE_TOURIST_ID_ADDRESS: 0x5FbDB2315678afecb367f032d93F642f64180aa3
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
 
 volumes:
   db_data:
+  backend_uploads:

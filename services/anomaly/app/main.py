@@ -5,6 +5,10 @@ import math
 
 app = FastAPI(title="Anomaly Service")
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 class Point(BaseModel):
     lat: float
     lon: float
